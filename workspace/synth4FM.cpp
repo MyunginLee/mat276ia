@@ -1,7 +1,16 @@
 /*    Gamma - Generic processing library
     See COPYRIGHT file for authors and license information
-    Example:
-    Description:
+    Example: 
+    Description: 
+    
+    set( 5,    262,    0.5,   0.1,      0.1,     0.75, 
+        dur(a).freq(b).amp(c).attack(d).decay(e).curve(f)
+         0.01,   7,      5,    
+        .idx1(g).idx2(h).idx3(i)
+         1,        1.0007, 
+        .carMul(j).modMul(k)
+         0 );
+        .pan(l);
 */
 
 
@@ -29,7 +38,6 @@ class FM : public SynthVoice {
 public:
     // Unit generators
     gam::Pan<> mPan;
-    gam::Osc<> mOsc;
     gam::Sine<> mVib;
     gam::ADSR<> mAmpEnv;
     gam::EnvFollow<> mEnvFollow;
@@ -46,7 +54,8 @@ public:
     float mCarMul;        // carrier frequency multiplier
     float mModMul;        // modulator frequency multiplier
     float mModAmt;        // frequency modulation amount
-
+    float modFreq;
+    
     gam::Sine<> car, mod;    // carrier, modulator sine oscillators
 
 
@@ -57,62 +66,72 @@ public:
         mAmpEnv.curve(0); // linear segments
         mAmpEnv.levels(0,1,1,0);
 
+        mModEnv.levels(0,1, 0);
+
         // We have the mesh be a sphere
         addDisc(mMesh, 1.0, 30);
 
-        createInternalTriggerParameter("amplitude", 0.1, 0.0, 1.0);
-        createInternalTriggerParameter("carrierFrequency", 60, 20, 5000);
-        createInternalTriggerParameter("attackTime", 0.1, 0.01, 3.0);
-        createInternalTriggerParameter("releaseTime", 3.0, 0.1, 10.0);
-        createInternalTriggerParameter("curve", 4.0, -10.0, 10.0);
-        createInternalTriggerParameter("pan", 0.0, -1.0, 1.0);
-        createInternalTriggerParameter("table", 0, 0, 8);
-
-        // FM
         createInternalTriggerParameter("dur", 2, 0.0, 10);
-        createInternalTriggerParameter("carMul", 440, 20, 5000);
-        createInternalTriggerParameter("modMul", 1, 0.0, 50);
-        createInternalTriggerParameter("mModAmt", 50, 0.0, 100);
+        createInternalTriggerParameter("amplitude", 0.1, 0.0, 1.0);
+        createInternalTriggerParameter("attackTime", 0.1, 0.01, 3.0);
+        createInternalTriggerParameter("curve", 4.0, -10.0, 10.0);
+        createInternalTriggerParameter("releaseTime", 3.0, 0.1, 10.0);
 
+        // FM index
+        createInternalTriggerParameter("carrierFrequency", 440, 20, 5000);
+        createInternalTriggerParameter("modEnv_Attack", 0.1, 0.01, 3.0);
+        createInternalTriggerParameter("modEnv_Curve", 7, 0.0, 10);
+        createInternalTriggerParameter("modEnv_Release", 3.0, 0.1, 10.0);
+        createInternalTriggerParameter("carMul", 1, 0, 3);  // carrier frequency multiplier
+        createInternalTriggerParameter("modMul", 1, 0.0, 20);  // modulator frequency multiplier
+        createInternalTriggerParameter("modAmt", 1, 0.0, 50);  // modulator frequency amplitude
 
+        createInternalTriggerParameter("pan", 0.0, -1.0, 1.0);
       }
 
     //
     virtual void onProcess(AudioIOData& io) override {
-        float mCarFrq = getInternalParameterValue("carrierFrequency");
-        float mCarMul = getInternalParameterValue("carMul");
-        float mModMul = getInternalParameterValue("modMul");
-        float mModAmt = getInternalParameterValue("mModAmt");
-        float modFreq = mCarFrq * mModMul;
+        mDur = getInternalParameterValue("dur");
+        mAmp = getInternalParameterValue("amplitude");
+        mCarFrq = getInternalParameterValue("carrierFrequency");
+        mCarMul = getInternalParameterValue("carMul");
+        mModMul = getInternalParameterValue("modMul");
+        mModAmt = getInternalParameterValue("modAmt");
+
+        mModEnv.lengths()[0]= getInternalParameterValue("modEnv_Attack");
+        mModEnv.lengths()[2]= getInternalParameterValue("modEnv_Release");
+        mModEnv.curve(getInternalParameterValue("modEnv_Curve"));
+
         while(io()){
-            car.freq(mCarFrq*mCarMul + mod()*mModEnv()*modFreq);
+            modFreq = mCarFrq * mModMul;
+            float carFreq = mCarFrq*mCarMul;
+            mod.freq(mCarFrq);
+            car.freq(carFreq + mod()*mModAmt*modFreq);
             float s1 = car() * mAmpEnv() * mAmp;
             float s2;
             mEnvFollow(s1);
             mPan(s1, s1,s2);
             io.out(0) += s1;
             io.out(1) += s2;
-            cout << mCarFrq << endl;
         }
         //if(mAmpEnv.done()) free();
         if(mAmpEnv.done() && (mEnvFollow.value() < 0.001)) free();
     }
 
     virtual void onProcess(Graphics &g) {
-        float frequency = getInternalParameterValue("frequency");
-        float amplitude = getInternalParameterValue("amplitude");
         g.pushMatrix();
-        g.translate(amplitude,  amplitude, -4);
-        float scaling = getInternalParameterValue("modMul")/100;
-        g.scale(scaling * frequency/200, scaling * frequency/400, scaling* 1);
-        g.color(mEnvFollow.value(), frequency/1000, mEnvFollow.value()* 10, 0.4);
+        g.translate(getInternalParameterValue("carrierFrequency")/ 300 - 2,  getInternalParameterValue("modAmt")/25-1, -4);
+        float scaling = getInternalParameterValue("amplitude")*1;
+        g.scale(scaling, scaling , scaling* 1);
+        g.color(HSV( getInternalParameterValue("modMul")/20, 1, mEnvFollow.value()* 10));
         g.draw(mMesh);
         g.popMatrix();
     }
     
     virtual void onTriggerOn() override {
+        updateFromParameters();
 
-        float modFreq = mCarFrq * mModMul;
+        modFreq = mCarFrq * mModMul;
         mod.freq(modFreq);
 
         mAmpEnv.totalLength(mDur, 1);
@@ -121,32 +140,38 @@ public:
         mAmpEnv.reset();
         mModEnv.reset();
     }
+    virtual void onTriggerOff() override {
+        mAmpEnv.triggerRelease();
+    }
 
     void updateFromParameters() {
-        mOsc.freq(getInternalParameterValue("frequency"));
         mAmpEnv.attack(getInternalParameterValue("attackTime"));
-        mAmpEnv.decay(getInternalParameterValue("attackTime"));
         mAmpEnv.release(getInternalParameterValue("releaseTime"));
         mAmpEnv.curve(getInternalParameterValue("curve"));
-        mPan.pos(getInternalParameterValue("pan"));
-
-
-// Something like this required        
-
-        
+        mPan.pos(getInternalParameterValue("pan"));        
     }
 
 };
 
 
-class MyApp : public App
+class MyApp : public App    
 {
+public:
+    SynthGUIManager<FM> synthManager {"synth"};
+
+    ParameterMIDI parameterMIDI;
+    int midiNote;
     virtual void onCreate() override {
         ParameterGUI::initialize();
 
         // Play example sequence. Comment this line to start from scratch
     //    synthManager.synthSequencer().playSequence("synth2.synthSequence");
         synthManager.synthRecorder().verbose(true);
+
+        parameterMIDI.open(0);    
+	    parameterMIDI.connectControl(synthManager.voice()->getInternalParameter("pan"), 10, 1);
+        parameterMIDI.connectNoteToValue(synthManager.voice()->getInternalParameter("carrierFrequency"),0,0,127,127);
+// 	void connectNoteToValue(Parameter &param, int channel, float min, int low, float max = -1, int high = -1) 
     }
 
     virtual void onSound(AudioIOData &io) override {
@@ -177,7 +202,7 @@ class MyApp : public App
             // Otherwise trigger note for polyphonic synth
             int midiNote = asciiToMIDI(k.key());
             if (midiNote > 0) {
-              synthManager.voice()->setInternalParameterValue("frequency", ::pow(2.f, (midiNote - 69.f)/12.f) * 432.f);
+              synthManager.voice()->setInternalParameterValue("carrierFrequency", ::pow(2.f, (midiNote - 69.f)/12.f) * 432.f);
               synthManager.triggerOn(midiNote);
             }
         }
@@ -194,7 +219,6 @@ class MyApp : public App
         ParameterGUI::cleanup();
     }
 
-    SynthGUIManager<FM> synthManager {"synth3"};
 };
 
 
