@@ -1,16 +1,17 @@
 /*    Gamma - Generic processing library
     See COPYRIGHT file for authors and license information
-    Example: 
-    Description: 
+    Example: Synth 4FM. 
+    Description: Synthesis Tutorial 4. FM. 
+    Author: Myungin Lee (Ben)
     
-    set( 5,    262,    0.5,   0.1,      0.1,     0.75, 
-        dur(a).freq(b).amp(c).attack(d).decay(e).curve(f)
-         0.01,   7,      5,    
-        .idx1(g).idx2(h).idx3(i)
-         1,        1.0007, 
-        .carMul(j).modMul(k)
-         0 );
-        .pan(l);
+#    amplitude attackTime curve releaseTime carrierFrequency modEnv_Attack modEnv_Curve modEnv_Release carMul modMul modAmt pan
+@ 0 5 FM 0.5 0.1 0.75 0.1 262 0.01 7 5 1 1.0007 1 1 #brass
+@ 5 5 FM 0.5 0.1 0.75 0.1 262 0.01 4 4 3 2.0007 1 -1 #clarinet
+@ 10 5 FM 0.5 0.2 0.75 0.1 262 2 2 2 3 1.0007 1 0 #oboe
+@ 15 5 FM 0.5 0.2 0.75 0.1 139 0.01 1.5 5 5 1.0007 1 0 #bassoon
+@ 20 10 FM 0.5 0.001 0.8 9.9 100 7 7 7 1 1.4 1 0 #gong
+@ 30 0.3 FM 0.5 0.001 0.8 0.25 100 1 1 1 1 1.48 1 0 #drum
+
 */
 
 
@@ -41,13 +42,12 @@ public:
     gam::Sine<> mVib;
     gam::ADSR<> mAmpEnv;
     gam::EnvFollow<> mEnvFollow;
-    gam::Env<3> mModEnv;
+    gam::Env<3> mModEnv; // -- Env (Tp lvl1, Tp len1, Tp lvl2)
     gam::Env<2> mVibEnv;
 
     // general synth parameters
-    //float mPitch; // implicit
-    float mAmp;
     float mDur;
+    float mAmp;
 
     // specific parameters
     float mCarFrq;        // carrier frequency
@@ -71,7 +71,6 @@ public:
         // We have the mesh be a sphere
         addDisc(mMesh, 1.0, 30);
 
-        createInternalTriggerParameter("dur", 2, 0.0, 10);
         createInternalTriggerParameter("amplitude", 0.1, 0.0, 1.0);
         createInternalTriggerParameter("attackTime", 0.1, 0.01, 3.0);
         createInternalTriggerParameter("curve", 4.0, -10.0, 10.0);
@@ -98,23 +97,26 @@ public:
         mModMul = getInternalParameterValue("modMul");
         mModAmt = getInternalParameterValue("modAmt");
 
-        mModEnv.lengths()[0]= getInternalParameterValue("modEnv_Attack");
-        mModEnv.lengths()[2]= getInternalParameterValue("modEnv_Release");
+        mModEnv.levels()[0]= getInternalParameterValue("modEnv_Attack");
+        mModEnv.levels()[2]= getInternalParameterValue("modEnv_Release");
         mModEnv.curve(getInternalParameterValue("modEnv_Curve"));
 
+        mAmpEnv.totalLength(mDur, 1);
         while(io()){
-            modFreq = mCarFrq * mModMul;
+            mModEnv.lengths()[1] = mAmpEnv.lengths()[1];
+            float modFreq = mCarFrq*mModMul;
             float carFreq = mCarFrq*mCarMul;
-            mod.freq(mCarFrq);
-            car.freq(carFreq + mod()*mModAmt*modFreq);
+            mod.freq(modFreq);
+            car.freq(carFreq + mod()*mModEnv()*modFreq);
             float s1 = car() * mAmpEnv() * mAmp;
             float s2;
             mEnvFollow(s1);
             mPan(s1, s1,s2);
             io.out(0) += s1;
             io.out(1) += s2;
+
+
         }
-        //if(mAmpEnv.done()) free();
         if(mAmpEnv.done() && (mEnvFollow.value() < 0.001)) free();
     }
 
@@ -134,7 +136,6 @@ public:
         modFreq = mCarFrq * mModMul;
         mod.freq(modFreq);
 
-        mAmpEnv.totalLength(mDur, 1);
         mModEnv.lengths()[1] = mAmpEnv.lengths()[1];
 
         mAmpEnv.reset();
@@ -157,7 +158,7 @@ public:
 class MyApp : public App    
 {
 public:
-    SynthGUIManager<FM> synthManager {"synth"};
+    SynthGUIManager<FM> synthManager {"synth4"};
 
     ParameterMIDI parameterMIDI;
     int midiNote;
@@ -169,9 +170,9 @@ public:
         synthManager.synthRecorder().verbose(true);
 
         parameterMIDI.open(0);    
-	    parameterMIDI.connectControl(synthManager.voice()->getInternalParameter("pan"), 10, 1);
+     parameterMIDI.connectControl(synthManager.voice()->getInternalParameter("pan"), 10, 1);
         parameterMIDI.connectNoteToValue(synthManager.voice()->getInternalParameter("carrierFrequency"),0,0,127,127);
-// 	void connectNoteToValue(Parameter &param, int channel, float min, int low, float max = -1, int high = -1) 
+//  void connectNoteToValue(Parameter &param, int channel, float min, int low, float max = -1, int high = -1) 
     }
 
     virtual void onSound(AudioIOData &io) override {
