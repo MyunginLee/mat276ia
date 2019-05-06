@@ -1,0 +1,13 @@
+-- ==== Configuring Gamma.
+-- Checking for module 'libsndfile'
+--   No package 'libsndfile' found
+-- Found SNDFILE 
+-- libsndfile: /usr/lib/x86_64-linux-gnu/libsndfile.so
+-- threading: -lpthread
+-- Using X11 for window creation
+-- Checking for module 'libassimp'
+--   No package 'libassimp' found
+-- Using libsndfile: /usr/lib/x86_64-linux-gnu/libsndfile.so
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/ben/Desktop/2019/allolib/276ia/workspace/build/midi/Release
